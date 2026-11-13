@@ -1,0 +1,42 @@
+digraph G {
+  graph [rankdir=LR, fontname="Arial", fontsize=20, pad=0.5, nodesep=0.6, ranksep=0.9, splines=spline,
+         label="PoC OrigenTours - Arquitectura tentativa en AWS (bajo costo)", labelloc=t];
+  node  [fontname="Arial", fontsize=11, shape=box, style="rounded,filled", fillcolor="#FFFFFF", color="#232F3E", penwidth=1.4];
+  edge  [fontname="Arial", fontsize=9, color="#444444"];
+
+  asesor [label="Asesor\n(navegador)", shape=ellipse, fillcolor="#E8F0FE"];
+  openai [label="API OpenAI\n(externa, HTTPS)", fillcolor="#E6F4EA", shape=box3d];
+
+  subgraph cluster_aws {
+    label="AWS Cloud"; style="rounded,dashed"; color="#FF9900"; fontcolor="#232F3E"; fontsize=14;
+    cdn [label="CloudFront\nHTTPS, un solo dominio", fillcolor="#F3E8FD"];
+    s3  [label="S3 privado\nbuild de React (estático)", fillcolor="#E6F4EA"];
+    ssm [label="SSM Parameter Store\nSecureString\n/origentours/poc/openai/api-key", fillcolor="#FDECEA"];
+    rol [label="IAM Role\n(instance profile)", fillcolor="#FDECEA"];
+    cw  [label="CloudWatch\nlogs y alarmas", fillcolor="#FCE8F3"];
+
+    subgraph cluster_vpc {
+      label="VPC"; style="rounded"; color="#8C4FFF"; fontsize=12;
+      igw [label="Internet Gateway", fillcolor="#F3E8FD"];
+      subgraph cluster_pub {
+        label="Subred pública (SG: solo CloudFront)"; style="rounded,filled"; fillcolor="#F1F8E9"; color="#7CB342"; fontsize=11;
+        ec2 [label="EC2 t4g.small\nNode.js + Express\n(Docker / PM2)", fillcolor="#FFF3E0"];
+      }
+      subgraph cluster_priv {
+        label="Subredes privadas (sin salida a internet)"; style="rounded,filled"; fillcolor="#E3F2FD"; color="#1E88E5"; fontsize=11;
+        rds [label="RDS PostgreSQL\ndb.t4g.micro\nJSONB · backups automáticos", fillcolor="#E8EAF6", shape=cylinder];
+      }
+    }
+  }
+
+  asesor -> cdn [label="HTTPS"];
+  cdn -> s3   [label="/*  (OAC)"];
+  cdn -> ec2  [label="/api/*"];
+  ec2 -> rds  [label="5432, SG a SG\nSSL"];
+  ec2 -> rol  [label="asume rol", style=dashed];
+  rol -> ssm  [label="ssm:GetParameter", style=dashed];
+  ec2 -> igw  [label="HTTPS saliente"];
+  igw -> openai;
+  ec2 -> cw   [label="logs", style=dotted];
+  rds -> cw   [style=dotted];
+}

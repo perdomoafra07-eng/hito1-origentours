@@ -1,0 +1,119 @@
+@startuml
+title PoC - Revisor inteligente de solicitudes (OrigenTours)
+autonumber
+
+actor "Asesor" as Asesor
+participant "Frontend web" as FE
+participant "Backend" as BE
+participant "Servicio LLM" as LLM
+database "Base de datos" as DB
+
+== 1. Recepción de la solicitud ==
+Asesor -> FE: Pega o carga el texto de la solicitud\n(correo / WhatsApp)
+FE -> BE: POST /solicitudes {texto, canal}
+activate BE
+BE -> DB: Guardar solicitud (estado = RECEIVED)
+DB --> BE: solicitudId
+BE -> DB: Actualizar estado = PROCESSING
+note right of FE: El Frontend queda esperando la respuesta\n(procesamiento síncrono)
+
+== 2. Extracción de datos con LLM ==
+BE -> LLM: Prompt + texto libre + esquema JSON esperado
+activate LLM
+LLM --> BE: JSON estructurado\n(tipo_cliente, destino, fechas, n_personas,\npresupuesto, restricciones)
+deactivate LLM
+
+opt El JSON es inválido
+    loop máx. 2 reintentos
+        BE -> LLM: Reintentar con instrucción de corrección
+        LLM --> BE: JSON estructurado
+    end
+end
+
+alt Extracción válida
+    BE -> DB: Guardar extracción (versión 1)
+
+    == 3. Validación con reglas de negocio ==
+    BE -> BE: Validar completitud\n(campos obligatorios presentes)
+    BE -> BE: Validar consistencia\n(fechas y edades de menores)
+    BE -> BE: Construir lista de hallazgos\n(campos faltantes y contradictorios)
+
+    == 4. Preguntas de seguimiento y estado ==
+    alt Hay hallazgos BLOQUEANTES
+        BE -> LLM: Generar preguntas (JSON extraído + hallazgos)
+        activate LLM
+        LLM --> BE: Preguntas de seguimiento para el cliente
+        deactivate LLM
+        BE -> DB: Guardar hallazgos y preguntas\n(estado = NEEDS_INFORMATION)
+    else Sin hallazgos o solo advertencias
+        BE -> DB: Guardar resultado\n(estado = PENDING_REVIEW)
+    end
+
+    BE --> FE: 201 Created {resultado completo, estado}
+    deactivate BE
+    FE -> Asesor: Muestra datos extraídos, alertas\ny preguntas sugeridas
+else Extracción fallida tras reintentos
+    BE -> DB: Restaurar estado = RECEIVED (reintentable)
+    BE --> FE: 422 Error de extracción
+    deactivate BE
+    FE -> Asesor: Muestra error y opción de reintentar
+end
+
+note over Asesor, DB
+  Las secciones siguientes aplican cuando hay un resultado
+  en estado PENDING_REVIEW o NEEDS_INFORMATION.
+  Ambos estados son revisables por el asesor.
+end note
+
+== 5. Revisión humana (human-in-the-loop) ==
+Asesor -> Asesor: Revisa el resultado
+
+alt Rechaza
+    Asesor -> FE: Rechazar (con motivo)
+    FE -> BE: POST /solicitudes/{id}/rechazo {motivo}
+    activate BE
+    BE -> DB: Estado = REJECTED + motivo + auditoría
+    BE --> FE: 200 OK {estado = REJECTED}
+    deactivate BE
+    FE -> Asesor: Confirma el rechazo
+else Aprueba el análisis (con o sin edición previa)
+    opt El asesor edita campos
+        loop Por cada edición
+            Asesor -> FE: Corrige campos extraídos
+            FE -> BE: PUT /solicitudes/{id}/resultado {cambios}
+            activate BE
+            BE -> DB: Guardar versión editada + registro de cambios
+            BE -> BE: Re-ejecutar validaciones de negocio\nsobre la versión editada
+            alt Persisten hallazgos
+                BE -> DB: Actualizar hallazgos\n(estado = NEEDS_INFORMATION)
+            else Sin hallazgos
+                BE -> DB: Actualizar hallazgos\n(estado = PENDING_REVIEW)
+            end
+            BE --> FE: 200 OK {versión validada, hallazgos, estado}
+            deactivate BE
+            FE -> Asesor: Muestra resultado revalidado
+        end
+    end
+
+    Asesor -> FE: Aprobar análisis
+    FE -> BE: POST /solicitudes/{id}/aprobacion {versión}
+    activate BE
+    BE -> DB: Consultar versión vigente y su validación
+    DB --> BE: Versión + resultado de validación
+
+    alt La versión fue validada
+        note right of BE
+          Aprobar el análisis no es aprobar la cotización:
+          se permite aprobar en NEEDS_INFORMATION y los
+          hallazgos pendientes quedan registrados.
+        end note
+        BE -> DB: Estado = APPROVED + auditoría\n(asesor, fecha y hora, versión)
+        BE --> FE: 200 OK {estado = APPROVED}
+        FE -> Asesor: Confirma y deja listo el análisis\npara responder al cliente
+    else La versión editada no fue validada
+        BE --> FE: 409 Conflict (validación pendiente)
+        FE -> Asesor: Solicita revalidar antes de aprobar
+    end
+    deactivate BE
+end
+@enduml

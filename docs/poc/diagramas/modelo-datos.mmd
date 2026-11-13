@@ -1,0 +1,56 @@
+erDiagram
+    SOLICITUD ||--o{ VERSION_ANALISIS : "tiene versiones"
+    SOLICITUD ||--o{ AUDITORIA_REVISION : "tiene auditorías"
+    VERSION_ANALISIS ||--o{ HALLAZGO : "genera"
+    VERSION_ANALISIS ||--o{ AUDITORIA_REVISION : "aparece en"
+
+    SOLICITUD {
+        uuid id PK
+        string canal "formulario_web, correo, whatsapp, redes_sociales"
+        string remitente "correo o número de WhatsApp del cliente"
+        text texto_original "inmutable"
+        string estado "RECEIVED, PROCESSING, NEEDS_INFORMATION, PENDING_REVIEW, APPROVED, REJECTED"
+        uuid version_vigente_id FK "última versión analizada"
+        uuid version_aprobada_id FK "nullable, versión aprobada por el asesor"
+        datetime recibida_en
+        datetime actualizada_en
+    }
+
+    VERSION_ANALISIS {
+        uuid id PK
+        uuid solicitud_id FK
+        int numero_version "único por solicitud"
+        string origen "LLM o ASESOR"
+        json datos "esquema del Taller 1 + confianza y evidencia por campo"
+        string creado_por "null si origen es LLM"
+        string modelo_llm "nullable, solo origen LLM"
+        string version_prompt "nullable, solo origen LLM"
+        datetime validada_en "null hasta que pasan las reglas de negocio"
+        datetime creada_en
+    }
+
+    HALLAZGO {
+        uuid id PK
+        uuid version_id FK
+        string tipo "FALTANTE o CONTRADICCION"
+        string campo "campo afectado, ej. fechas"
+        string regla_codigo "regla de negocio que lo detectó"
+        text descripcion
+        string severidad "BLOQUEANTE o ADVERTENCIA (informa, no bloquea la aprobación)"
+        text pregunta_sugerida "nullable, pregunta generada por el LLM"
+        text pregunta_final "nullable, versión editada por el asesor"
+        string estado "ABIERTO, RESUELTO o DESCARTADO"
+        datetime creado_en
+    }
+
+    AUDITORIA_REVISION {
+        uuid id PK
+        uuid solicitud_id FK
+        uuid version_id FK "versión sobre la que se actuó"
+        string asesor_id "identificador del asesor"
+        string accion "APROBAR, CORREGIR, RECHAZAR"
+        text observaciones "nullable, ej. motivo del rechazo"
+        string estado_anterior
+        string estado_nuevo
+        datetime fecha_accion
+    }

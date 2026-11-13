@@ -1,0 +1,55 @@
+@startuml
+
+skinparam shadowing false
+skinparam state {
+  BackgroundColor #EAF2F8
+  BorderColor #2874A6
+  ArrowColor #566573
+}
+
+hide empty description
+
+[*] --> RECEIVED : Solicitud registrada\n(formulario_web / asesor)
+
+' ==========================================
+' PROCESAMIENTO
+' ==========================================
+
+RECEIVED --> PROCESSING : Iniciar procesamiento
+
+PROCESSING --> RECEIVED : Error de extracción /\nfallo técnico\n[reintento requerido]
+
+PROCESSING --> NEEDS_INFORMATION : Extracción y validación\n[hay hallazgos bloqueantes]
+
+PROCESSING --> PENDING_REVIEW : Extracción y validación\n[sin bloqueantes]
+
+' ==========================================
+' INFORMACIÓN PENDIENTE
+' ==========================================
+
+NEEDS_INFORMATION --> PENDING_REVIEW : Revisión del asesor /\nresultado actualizado
+
+NEEDS_INFORMATION --> APPROVED : Aprobar análisis\n[JSON válido y versión vigente revalidada]
+
+NEEDS_INFORMATION --> REJECTED : Rechazar solicitud\n[motivo registrado]
+
+' ==========================================
+' REVISIÓN
+' ==========================================
+
+PENDING_REVIEW --> PENDING_REVIEW : Corregir información /\nrevalidación satisfactoria
+
+PENDING_REVIEW --> NEEDS_INFORMATION : Corregir información /\n[persisten bloqueantes]
+
+PENDING_REVIEW --> APPROVED : Aprobar análisis\n[JSON válido y versión vigente revalidada]
+
+PENDING_REVIEW --> REJECTED : Rechazar solicitud\n[motivo registrado]
+
+' ==========================================
+' ESTADOS FINALES
+' ==========================================
+
+APPROVED --> [*]
+REJECTED --> [*]
+
+@enduml

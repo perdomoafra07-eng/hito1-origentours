@@ -1,0 +1,200 @@
+@startuml
+left to right direction
+
+skinparam shadowing false
+skinparam packageStyle rectangle
+skinparam actorStyle awesome
+
+skinparam usecase {
+  BackgroundColor #EAF2F8
+  BorderColor #2874A6
+  ArrowColor #566573
+}
+
+skinparam rectangle {
+  BorderColor #34495E
+}
+
+' ==========================================
+' ACTORES
+' ==========================================
+
+actor "Usuario visitante\n(Cliente sin cuenta)" as Visitor
+actor "Asesor de viajes\n(Usuario logueado)" as Advisor
+actor "Servicio LLM\n(OpenAI API)" as LLM
+
+' ==========================================
+' FRONTERA DEL SISTEMA
+' ==========================================
+
+rectangle "Sistema inteligente de revisión de solicitudes de cotización" {
+
+  package "1. Autenticación" {
+    usecase "CU-00\nIniciar sesión" as UC00
+  }
+
+  package "2. Gestión de solicitudes" {
+    usecase "CU-01\nRegistrar solicitud\nde cotización" as UC01
+    usecase "CU-10\nConsultar solicitudes\nregistradas" as UC10
+    usecase "CU-11\nReprocesar solicitud" as UC11
+    usecase "CU-13\nConsultar historial de\nprocesamiento y cambios" as UC13
+  }
+
+  package "3. Procesamiento inteligente" {
+    usecase "CU-02\nExtraer información\nestructurada" as UC02
+    usecase "CU-03\nValidar estructura\ny formato del JSON" as UC03
+    usecase "CU-12\nGestionar errores\nde procesamiento" as UC12
+  }
+
+  package "4. Validación de negocio" {
+    usecase "CU-04\nValidar completitud\nde la solicitud" as UC04
+    usecase "CU-05\nValidar consistencia\nde los datos" as UC05
+    usecase "CU-06\nGenerar preguntas\nde seguimiento" as UC06
+  }
+
+  package "5. Revisión y aprobación" {
+    usecase "CU-07\nConsultar resultados\ndel análisis" as UC07
+    usecase "CU-08\nCorregir información\nextraída" as UC08
+    usecase "CU-14\nRevalidar tras corrección" as UC14
+    usecase "CU-09\nAprobar análisis\nde solicitud" as UC09
+    usecase "CU-15\nRechazar solicitud\n(con motivo)" as UC15
+  }
+}
+
+' ==========================================
+' ASOCIACIONES DE ACTORES
+' ==========================================
+
+' Usuario visitante: solo formulario público
+Visitor --> UC01
+
+' Asesor autenticado
+Advisor --> UC00
+Advisor --> UC01
+Advisor --> UC07
+Advisor --> UC08
+Advisor --> UC09
+Advisor --> UC10
+Advisor --> UC11
+Advisor --> UC13
+Advisor --> UC15
+
+' Servicio externo de IA
+LLM --> UC02
+LLM --> UC06
+
+' ==========================================
+' RELACIONES INCLUDE
+' ==========================================
+
+' Registro de solicitud y extracción automática
+UC01 ..> UC02 : <<include>>
+
+' Validación estructural obligatoria
+UC02 ..> UC03 : <<include>>
+
+' Validación de negocio después de extracción válida
+UC02 ..> UC04 : <<include>>
+UC02 ..> UC05 : <<include>>
+
+' Reprocesamiento de solicitud
+UC11 ..> UC02 : <<include>>
+
+' Revalidación después de una corrección
+UC14 ..> UC04 : <<include>>
+UC14 ..> UC05 : <<include>>
+
+' Aprobación basada en revisión
+UC09 ..> UC07 : <<include>>
+
+' ==========================================
+' RELACIONES EXTEND
+' ==========================================
+
+' Preguntas generadas cuando existen faltantes
+' o inconsistencias
+UC06 ..> UC04 : <<extend>>
+UC06 ..> UC05 : <<extend>>
+
+' Gestión de errores cuando falla el procesamiento
+UC12 ..> UC02 : <<extend>>
+
+' Revalidación únicamente si el asesor modifica datos
+UC14 ..> UC08 : <<extend>>
+
+' ==========================================
+' NOTAS Y RESTRICCIONES
+' ==========================================
+
+note bottom of Visitor
+  Cliente sin cuenta.
+  Solo puede enviar solicitudes
+  mediante el formulario web
+  público. No inicia sesión.
+
+  No puede consultar resultados
+  del análisis ni acceder a
+  solicitudes registradas.
+end note
+
+note bottom of Advisor
+  Usuario autenticado.
+  Puede consultar, revisar,
+  corregir, aprobar y rechazar
+  solicitudes.
+end note
+
+note right of UC01
+  La solicitud puede recibirse
+  desde dos canales:
+  - Formulario web público
+    (formulario_web).
+  - Registro realizado
+    por un asesor.
+
+  El origen se conserva
+  en el registro.
+end note
+
+note right of UC09
+  Precondiciones:
+  - JSON estructuralmente válido.
+  - Versión vigente revalidada.
+  - Revisión del asesor realizada.
+
+  No requiere que todos los campos
+  estén completos ni que el cliente
+  haya respondido las preguntas.
+
+  Aprobar el análisis no equivale
+  a aprobar una cotización.
+end note
+
+note right of UC15
+  El asesor debe proporcionar
+  un motivo de rechazo.
+
+  El motivo queda registrado
+  en la solicitud.
+end note
+
+note bottom of UC06
+  El LLM genera preguntas a partir
+  de información faltante o
+  inconsistencias identificadas.
+
+  Las preguntas son sugerencias
+  para revisión del asesor.
+  No se envían automáticamente.
+end note
+
+note bottom of UC14
+  Se ejecuta solamente cuando
+  el asesor modifica información.
+
+  Actualiza el resultado de las
+  validaciones sobre la versión
+  vigente del JSON.
+end note
+
+@enduml
