@@ -1,12 +1,12 @@
 # Revisor inteligente de solicitudes de cotización – OrigenTours
 
-PoC del Grupo 11 (Hito 1). El revisor recibe solicitudes de cotización de OrigenTours. El backend ya valida la configuración, escribe logs y tiene pruebas; todavía no extrae solicitudes ni se conecta a la base de datos o a OpenAI. El frontend muestra la página inicial.
+PoC del Grupo 11 (Hito 1). El revisor recibe solicitudes de cotización de OrigenTours. El backend extrae el texto a JSON estructurado y lo devuelve en la respuesta; todavía no lo guarda en la base de datos. El frontend muestra la página inicial.
 
 Los diagramas de la actividad de GenAI están en [docs/diagramas.md](docs/diagramas.md).
 
 ## Requisitos
 
-- Node.js 20
+- Node.js 22 o superior (lo pide el SDK de OpenAI; en esta máquina está Node 26)
 - npm
 - Docker, para la base PostgreSQL local
 
@@ -26,6 +26,14 @@ npm run dev
 Completa `backend/.env` con tus valores. El archivo está en `.gitignore`. Si falta `OPENAI_API_KEY`, `DATABASE_URL`, `LLM_MODEL`, `LLM_TIMEOUT_MS` o `LLM_TEMPERATURE`, el proceso se detiene e indica la variable.
 
 El servidor escucha en el puerto `3001`, salvo que `PORT` tenga otro valor. `GET /health` responde `{"status":"ok"}`.
+
+`POST /api/extracciones` recibe `{ "texto", "canal" }`. El canal es `formulario_web`, `correo`, `whatsapp` o `redes_sociales`. La respuesta trae el JSON extraído, `version_prompt`, `modelo`, `tiempo_ms` y `tokens`. No se persiste. Hay tres textos de prueba en [docs/poc/solicitudes-demo.md](docs/poc/solicitudes-demo.md).
+
+```powershell
+$json = '{"texto":"Queremos ir a Barichara.","canal":"whatsapp"}'
+$bytes = [System.Text.Encoding]::UTF8.GetBytes($json)
+Invoke-RestMethod -Method Post -Uri http://localhost:3001/api/extracciones -ContentType "application/json" -Body $bytes
+```
 
 ```powershell
 $env:PORT = 4000
@@ -58,7 +66,7 @@ Vite muestra la dirección local (por defecto `http://localhost:5173`). La pági
 
 ## Estructura
 
-- `backend/`: API en Node.js 20 y Express (ES Modules), con configuración, logs y pruebas.
+- `backend/`: API en Node.js y Express (ES Modules), con extracción, logs y pruebas.
 - `frontend/`: aplicación React creada con Vite (JavaScript).
 - `docker-compose.yml`: PostgreSQL 16 local.
 - `docs/`: diagramas de la actividad.
